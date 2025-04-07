@@ -68,10 +68,43 @@ private:
         skipWhitespace();
         std::string result;
 
-        if (currentChar() == '(')
+        if (currentChar() == '$') // Check for PRINCE operation
         {
-            advance();                              // Skip '('
-            result = parseExpression();             // Parse the inner expression
+            advance(); // Skip '$'
+
+            // Expect opening parenthesis
+            if (currentChar() != '(')
+            {
+                throw std::runtime_error("Error: PRINCE operation requires parentheses");
+            }
+            advance(); // Skip '('
+
+            std::string left = parseExpression(); // Parse first operand
+
+            // Expect comma
+            if (currentChar() != ',')
+            {
+                throw std::runtime_error("Error: PRINCE operation requires two operands separated by comma");
+            }
+            advance(); // Skip ','
+
+            std::string right = parseExpression(); // Parse second operand
+
+            // Expect closing parenthesis
+            if (currentChar() != ')')
+            {
+                throw std::runtime_error("Error: Missing closing parenthesis for PRINCE operation");
+            }
+            advance(); // Skip ')'
+
+            std::string temp = getTempVar();
+            instructions.push_back({"PRINCE", left, right, temp});
+            return temp;
+        }
+        else if (currentChar() == '(')
+        {
+            advance();                  // Skip '('
+            result = parseExpression(); // Parse the inner expression
             if (currentChar() == ')')
             {
                 advance(); // Skip ')'
@@ -116,7 +149,7 @@ private:
         {
             advance(); // Skip '-'
             std::string operand = parseFactor();
-            
+
             std::string temp = getTempVar();
             instructions.push_back({"MUL", "-1", operand, temp});
             result = temp;
@@ -136,7 +169,7 @@ private:
         skipWhitespace();
         if (currentChar() == '^')
         {
-            advance();                         // Skip '^'
+            advance();                            // Skip '^'
             std::string exponent = parseFactor(); // Parse the exponent
 
             std::string temp = getTempVar(); // Generate a temporary variable
@@ -154,8 +187,8 @@ private:
         while (currentChar() == '*' || currentChar() == '/')
         {
             char op = currentChar();
-            advance();                         // Move to the next character
-            std::string right = parsePower();  // Call parsePower instead of parseFactor
+            advance();                        // Move to the next character
+            std::string right = parsePower(); // Call parsePower instead of parseFactor
 
             if (op == '/' && right == "0")
             {
@@ -226,18 +259,19 @@ public:
 };
 
 // Update the computeInstruction function to handle numeric literals
-double getOperandValue(const std::string &operand, const std::unordered_map<std::string, double> &variables) 
+double getOperandValue(const std::string &operand, const std::unordered_map<std::string, double> &variables)
 {
     // Check if the operand is a number
-    if (isdigit(operand[0]) || (operand[0] == '-' && operand.length() > 1 && isdigit(operand[1]))) {
+    if (isdigit(operand[0]) || (operand[0] == '-' && operand.length() > 1 && isdigit(operand[1])))
+    {
         return std::stod(operand);
     }
-    
+
     // Otherwise, look it up in the variables map
     return variables.at(operand);
 }
 
-double computeInstruction(const Instruction &instr, const std::unordered_map<std::string, double> &variables) 
+double computeInstruction(const Instruction &instr, const std::unordered_map<std::string, double> &variables)
 {
     double operand1 = getOperandValue(instr.operand1, variables);
     double operand2 = instr.operand2.empty() ? 0 : getOperandValue(instr.operand2, variables);
@@ -252,6 +286,8 @@ double computeInstruction(const Instruction &instr, const std::unordered_map<std
         return operand1 / operand2;
     else if (instr.operation == "POW")
         return std::pow(operand1, operand2);
+    else if (instr.operation == "PRINCE")
+        return (operand1 + operand2) / 2.0; // Calculate average of two values
 
     throw std::runtime_error("Error: Unknown operation " + instr.operation);
 }
@@ -289,14 +325,14 @@ int main()
             for (const auto &instr : parser.getInstructions())
             {
                 // Only ask for single-letter variable values (like x, y, z)
-                if (isalpha(instr.operand1[0]) && instr.operand1.length() == 1 && 
+                if (isalpha(instr.operand1[0]) && instr.operand1.length() == 1 &&
                     variables.find(instr.operand1) == variables.end())
                 {
                     std::cout << "Enter value for " << instr.operand1 << ": ";
                     std::cin >> variables[instr.operand1];
                 }
-                
-                if (!instr.operand2.empty() && isalpha(instr.operand2[0]) && 
+
+                if (!instr.operand2.empty() && isalpha(instr.operand2[0]) &&
                     instr.operand2.length() == 1 && variables.find(instr.operand2) == variables.end())
                 {
                     std::cout << "Enter value for " << instr.operand2 << ": ";
@@ -310,26 +346,33 @@ int main()
             {
                 double result = computeInstruction(instr, variables);
                 variables[instr.result] = result; // Store the result in the variable map
-                
+
                 std::cout << instr.operation << " ";
-                
+
                 // Display operand1 (showing its value if it's a variable)
-                if (isalpha(instr.operand1[0]) && instr.operand1.length() == 1) {
+                if (isalpha(instr.operand1[0]) && instr.operand1.length() == 1)
+                {
                     std::cout << instr.operand1 << "(" << getOperandValue(instr.operand1, variables) << ")";
-                } else {
+                }
+                else
+                {
                     std::cout << instr.operand1;
                 }
-                
-                if (!instr.operand2.empty()) {
+
+                if (!instr.operand2.empty())
+                {
                     std::cout << " ";
                     // Display operand2 (showing its value if it's a variable)
-                    if (isalpha(instr.operand2[0]) && instr.operand2.length() == 1) {
+                    if (isalpha(instr.operand2[0]) && instr.operand2.length() == 1)
+                    {
                         std::cout << instr.operand2 << "(" << getOperandValue(instr.operand2, variables) << ")";
-                    } else {
+                    }
+                    else
+                    {
                         std::cout << instr.operand2;
                     }
                 }
-                
+
                 std::cout << " -> " << instr.result << " = " << result << "\n";
             }
 
